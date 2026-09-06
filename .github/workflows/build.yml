@@ -1,0 +1,185 @@
+name: build
+
+# Tests run on all three platforms; executables are built on Windows and
+# macOS. PyInstaller cannot cross-compile -- it bundles the host's Python
+# interpreter and native libraries -- so a macOS bundle can only be produced
+# on a macOS runner. That is the whole reason this workflow exists.
+#
+# Pushing a tag like v1.0.0 additionally attaches the builds to a release.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.13'
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip pytest
+
+      # The UI tests need a display. Windows and macOS runners have one;
+      # Linux does not, so give it a virtual one rather than letting those
+      # tests silently skip and hide a regression.
+      - name: Install a virtual display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb tk
+
+      - name: Report the Tk version
+        run: python -c "import tkinter; print('Tk', tkinter.TkVersion)"
+
+      - name: Run tests
+        if: runner.os != 'Linux'
+        run: python -m pytest tests/ -q
+
+      - name: Run tests (Linux, under Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m pytest tests/ -q
+
+  build:
+    name: build (${{ matrix.os }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      # The test job already ran the suite on this commit, so the build
+      # scripts skip it rather than paying for it twice.
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\build.ps1 -SkipTests
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: ./build.sh --skip-tests
+
+      # A .app is a directory, and upload-artifact's zipping drops the
+      # executable permission bit, which leaves the downloaded bundle unable
+      # to launch. ditto preserves macOS permissions and metadata, so the
+      # artifact is a working app rather than a broken one.
+      - name: Package the app bundle (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          ditto -c -k --keepParent BareTail.app BareTail-macos.zip
+          ls -la
+
+      - name: Smoke-test the build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Confirm the executable starts, opens a file and shuts down
+          # cleanly. A build that packages without error but cannot launch
+          # is the failure worth catching here.
+          "hello from CI" | Out-File -Encoding utf8 sample.log
+          $p = Start-Process -FilePath dist\BareTail.exe -ArgumentList sample.log -PassThru
+          Start-Sleep -Seconds 20
+          $alive = Get-Process -Name BareTail -ErrorAction SilentlyContinue
+          if (-not $alive) { throw "BareTail.exe exited instead of staying open" }
+          Write-Host "running:" ($alive | ForEach-Object { $_.Id }) -Separator ' '
+          $alive | Stop-Process -Force
+
+      - name: Smoke-test the build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          echo "hello from CI" > sample.log
+          ./dist/BareTail sample.log &
+          pid=$!
+          sleep 20
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "BareTail exited instead of staying open" >&2
+            exit 1
+          fi
+          echo "running as pid $pid"
+          kill "$pid"
+
+      - name: Upload the Windows executable
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BareTail-windows
+          path: dist/BareTail.exe
+          if-no-files-found: error
+
+      - name: Upload the macOS bundle
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BareTail-macos
+          path: dist/BareTail-macos.zip
+          if-no-files-found: error
+
+  release:
+    name: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach the builds to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          find artifacts -type f -print
+
+          # gh is preinstalled on the runner, so publishing needs no
+          # third-party action -- one less dependency in the supply chain of a
+          # workflow that produces downloadable binaries.
+          #
+          # This job does not check the repository out, so release notes are
+          # left to --generate-notes rather than anything reading git history.
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "BareTail $tag" \
+              --generate-notes
+          fi
+
+          gh release upload "$tag" \
+            artifacts/BareTail-windows/BareTail.exe \
+            artifacts/BareTail-macos/BareTail-macos.zip \
+            --repo "$GITHUB_REPOSITORY" --clobber
