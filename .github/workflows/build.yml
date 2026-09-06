@@ -119,7 +119,10 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           echo "hello from CI" > sample.log
-          ./dist/BareTail sample.log &
+          # The executable inside the bundle, which is what macOS actually
+          # launches -- more meaningful than the loose binary beside it, and
+          # correct under onedir where dist/BareTail is a directory.
+          ./dist/BareTail.app/Contents/MacOS/BareTail sample.log &
           pid=$!
           sleep 20
           if ! kill -0 "$pid" 2>/dev/null; then

@@ -7,7 +7,8 @@
 # produces a single executable file.
 #
 #   ./build.sh                 build the default for this platform
-#   ./build.sh --onedir        a folder instead of one file (starts faster)
+#   ./build.sh --onedir        a folder rather than one file; already the
+#                              default on macOS, where a .app is a directory
 #   ./build.sh --console       keep stdout attached, for debugging a build
 #   ./build.sh --skip-tests    build without running the tests first
 #
@@ -111,6 +112,17 @@ ok "build/, dist/ and *.spec removed"
 # --- Build ------------------------------------------------------------------
 step "Building"
 ARGS=(-m PyInstaller --name "$NAME" --noconfirm --clean)
+
+# A macOS .app is a directory by definition, so one-file mode cannot apply to
+# one. PyInstaller warns that the combination "clashes with macOS's security"
+# -- it breaks signing and notarisation -- and will reject it outright in
+# version 7. Nothing is lost by using onedir here: the .app is still the
+# single icon a user drags to Applications.
+if [ "$PLATFORM" = "macos" ] && [ "$CONSOLE" -eq 0 ] && [ "$ONEDIR" -eq 0 ]; then
+    ONEDIR=1
+    note "Building a .app bundle, so using onedir (one-file mode cannot"
+    note "produce a bundle, and PyInstaller 7 refuses the combination)."
+fi
 
 if [ "$ONEDIR" -eq 1 ]; then ARGS+=(--onedir); else ARGS+=(--onefile); fi
 if [ "$CONSOLE" -eq 1 ]; then ARGS+=(--console); else ARGS+=(--windowed); fi
