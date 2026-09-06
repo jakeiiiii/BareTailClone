@@ -16,3 +16,8 @@ baretail.json
 # Generated logs and sessions
 *.log
 *.btsession
+
+# Build output
+build/
+dist/
+*.spec

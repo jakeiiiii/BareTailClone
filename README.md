@@ -101,6 +101,7 @@ the file access underneath it is 0.1–0.3 ms.
 
 ```
 baretail.py              entry point
+build.ps1  build.sh      standalone executable builds
 baretail/
   cli.py                 command line switches, window placement, tiling
   config.py              JSON settings; file | registry | none, plus sessions
@@ -125,6 +126,34 @@ tools/                   log generator, benchmark, tail verification
 
 `core/` contains no tkinter imports, so the engine is testable headlessly and
 the toolkit choice stays reversible.
+
+## Building an executable
+
+Produces a standalone application needing no Python on the target machine —
+the single-executable, no-installer form the original BareTail ships in.
+
+```powershell
+.uild.ps1
+```
+
+```bash
+./build.sh
+```
+
+`build.ps1` writes `dist\BareTail.exe` (~10 MB). `build.sh` writes
+`dist/BareTail.app` on macOS and `dist/BareTail` on Linux. Both run the test
+suite first, install PyInstaller if it is missing, and accept `--onedir`
+(starts faster, since a one-file build unpacks itself on every launch),
+`--console` (keep a console attached for debugging a build) and
+`--skip-tests`.
+
+Settings are written beside the executable, so a built binary copied to a USB
+stick or a network share carries your highlight rules with it.
+
+On macOS, build against Tk 8.6 — from python.org or `brew install python-tk`.
+Apple's system Tk is 8.5 and renders noticeably worse; the script warns if it
+finds it. An unsigned bundle also trips Gatekeeper if it is downloaded rather
+than built locally: `xattr -dr com.apple.quarantine dist/BareTail.app`.
 
 ## Development
 
