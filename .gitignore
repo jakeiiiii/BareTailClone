@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Test and tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Application settings, written beside the executable at runtime
+baretail.json
+
+# Generated logs and sessions
+*.log
+*.btsession
