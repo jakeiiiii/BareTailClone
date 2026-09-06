@@ -17,6 +17,8 @@ import tkinter as tk
 import tkinter.font as tkfont
 from typing import Callable
 
+from .tkutil import view_font
+
 __all__ = ["TabStrip", "Side", "Orientation", "TabStatus"]
 
 
@@ -85,7 +87,7 @@ class TabStrip(tk.Canvas):
         self._on_close = on_close
         self._side = side
         self._orientation = orientation
-        self._font = tkfont.Font(family=font_family, size=font_size)
+        self._font = view_font(family=font_family, size=font_size)
 
         self._tabs: list[_Tab] = []
         self._active: str | None = None

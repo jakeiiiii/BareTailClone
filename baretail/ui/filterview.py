@@ -25,6 +25,7 @@ from typing import Callable
 from ..core import encoding as enc
 from ..core.highlight import DEFAULT_COLOURS, RuleSet
 from ..core.linefile import Line
+from .tkutil import release_font, view_font
 
 __all__ = ["FilteredView", "MAX_LINES"]
 
@@ -56,7 +57,8 @@ class FilteredView(ttk.Frame):
         self._dropped = 0
         self._tag_signature: list[tuple] = []
 
-        self._font = tkfont.Font(family=font_family, size=font_size)
+        # See ui/tkutil.py: a Font collected on a worker thread hangs it.
+        self._font = view_font(family=font_family, size=font_size)
         self.text = tk.Text(self, wrap="char" if wrap else "none", font=self._font,
                             state="disabled", cursor="arrow", padx=2, pady=0,
                             borderwidth=0, highlightthickness=0, insertwidth=0,
@@ -272,6 +274,12 @@ class FilteredView(ttk.Frame):
             self.render()
         else:
             self._update_scrollbar()
+
+    def destroy(self) -> None:
+        """Release the Tcl font here, on the main thread, while we still can."""
+        release_font(self._font)
+        self._font = None
+        super().destroy()
 
     def _on_double_click(self, event) -> str:
         """Jump the unfiltered view to the line that was double-clicked."""

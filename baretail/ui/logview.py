@@ -26,6 +26,7 @@ from typing import Callable
 from ..core import encoding as enc
 from ..core.highlight import DEFAULT_COLOURS, RuleSet
 from ..core.linefile import Line, LineFile
+from .tkutil import release_font, view_font
 
 __all__ = ["VirtualTextView"]
 
@@ -65,7 +66,9 @@ class VirtualTextView(ttk.Frame):
         self._marked_offset: int | None = None
         self._tag_signature: list[tuple] = []
 
-        self._font = tkfont.Font(family=font_family, size=font_size)
+        # view_font, not tkfont.Font: a Font finalised on a worker thread
+        # calls Tcl from that thread and hangs it.  See ui/tkutil.py.
+        self._font = view_font(family=font_family, size=font_size)
 
         self.text = tk.Text(
             self, wrap="char" if wrap else "none", font=self._font,
@@ -469,6 +472,12 @@ class VirtualTextView(ttk.Frame):
             self.clipboard_clear()
             self.clipboard_append(data)
         return data
+
+    def destroy(self) -> None:
+        """Release the Tcl font here, on the main thread, while we still can."""
+        release_font(self._font)
+        self._font = None
+        super().destroy()
 
     def copy_all(self) -> tuple[bool, str]:
         """Copy the entire file, streaming it rather than rendering it.

@@ -118,8 +118,8 @@ baretail/
     tabstrip.py          the four-sided tab strip
     mainwindow.py        menus, toolbar, status bar, wiring
     searchbar.py         find bar and results table
-    highlightdlg.py  prefsdlg.py  dialogs.py  pump.py
-tests/                   133 tests, no display needed for most
+    highlightdlg.py  prefsdlg.py  dialogs.py  pump.py  tkutil.py
+tests/                   135 tests, no display needed for most
 tools/                   log generator, benchmark, tail verification
 ```
 
@@ -145,8 +145,8 @@ the true end of the file.
 
 ## Notes
 
-Two Windows details are worth knowing about, because both are easy to get
-wrong and neither is obvious:
+Three details are worth knowing about, because each is easy to get wrong and
+none is obvious. The first two are Windows-specific; the third is not.
 
 **Share mode.** Python's built-in `open()` withholds `FILE_SHARE_DELETE`, so
 merely having a log open would make `os.replace` fail for whoever owns it —
@@ -156,3 +156,12 @@ watching. `core/fileopen.py` opens through `CreateFileW` instead.
 **Threads and Tk.** The indexer, tailer and search engine each run on their own
 thread and none of them may touch a widget. Everything they report is posted
 through `ui/pump.py` and applied on the main thread.
+
+**Tk finalisers, which are subtler.** `tkinter.font.Font.__del__` calls into
+Tcl, and a finaliser runs on whichever thread happens to collect the object —
+for anything caught in a reference cycle, that is the cyclic collector, on
+whatever thread allocated at the wrong moment. When that thread was a worker,
+the Tcl call blocked forever. The symptom was a search delivering exactly one
+batch of results and then hanging, which looks like a bug in the search engine
+and is nothing of the sort. `ui/tkutil.py` creates fonts whose collection can
+never touch Tcl, and releases them explicitly from the main thread instead.

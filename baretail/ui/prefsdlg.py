@@ -17,6 +17,7 @@ from tkinter import ttk
 from ..config import StorageMode
 from ..core import encoding as enc
 from .dialogs import ColourButton, ModalDialog
+from .tkutil import release_font, view_font
 from .tabstrip import Orientation, Side
 
 __all__ = ["PreferencesDialog", "FontDialog"]
@@ -70,7 +71,7 @@ class FontDialog(ModalDialog):
                     command=self._preview).grid(row=3, column=1, sticky="w",
                                                 padx=(6, 0), pady=(6, 0))
 
-        self._preview_font = tkfont.Font(family=family, size=size)
+        self._preview_font = view_font(family=family, size=size)
         self._preview_text = tk.Text(master, height=3, width=54, wrap="none",
                                      font=self._preview_font, state="disabled",
                                      relief="sunken", borderwidth=1)
@@ -114,11 +115,17 @@ def _is_fixed(family: str) -> bool:
     Measured rather than guessed from the name, since the useful monospace
     families on a given machine are not a fixed list.
     """
+    font = None
     try:
-        font = tkfont.Font(family=family, size=10)
+        # One throwaway font per installed family, so these are the most
+        # likely of all to be collected on a worker thread; view_font makes
+        # that harmless, and the release below keeps Tcl tidy anyway.
+        font = view_font(family=family, size=10)
         return font.measure("i") == font.measure("W")
     except tk.TclError:
         return False
+    finally:
+        release_font(font)
 
 
 class PreferencesDialog(ModalDialog):

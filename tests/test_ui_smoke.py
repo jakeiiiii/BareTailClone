@@ -497,6 +497,38 @@ def test_growth_marks_a_background_tab(app, tmp_path, logfile):
     assert app._tabstrip.find_tab(background.key).status == TabStatus.CHANGED
 
 
+def test_deleting_an_open_file_does_not_take_the_window_with_it(app, tmp_path):
+    """A watched file can be deleted at any moment -- by a cleanup job, a
+    rotation, or a user emptying a directory -- and the window has to survive
+    it and say so, not disappear."""
+    path = tmp_path / "doomed.log"
+    path.write_bytes(b"".join(b"line %04d\n" % i for i in range(200)))
+    tab = app.open_file(str(path))
+    app.update()
+
+    os.remove(str(path))
+    assert pump_until(app, lambda: tab.error is not None), \
+        "deletion was never noticed"
+
+    assert app.winfo_exists()
+    assert app._tabstrip.find_tab(tab.key).status == TabStatus.MISSING
+    assert "no longer available" in app._status_text.cget("text")
+
+
+def test_a_deleted_file_that_reappears_is_picked_up(app, tmp_path):
+    path = tmp_path / "returns.log"
+    path.write_bytes(b"before\n")
+    tab = app.open_file(str(path))
+    app.update()
+
+    os.remove(str(path))
+    assert pump_until(app, lambda: tab.error is not None)
+
+    path.write_bytes(b"after the gap\n")
+    assert pump_until(app, lambda: tab.error is None), "reappearance was missed"
+    assert rendered(tab.view)[-1] == "after the gap"
+
+
 def test_filter_shows_only_matching_lines(app, logfile):
     tab = app.open_file(logfile)
     app.update()
@@ -516,8 +548,10 @@ def test_exclude_filter_drops_matching_lines(app, logfile):
     app.update()
 
     app._set_filter(Matcher("ERROR"), FilterMode.EXCLUDE)
-    assert pump_until(app, lambda: tab.filter_view is not None
-                      and tab.filter_view.count >= 450), "exclude filter produced too few"
+    ok = pump_until(app, lambda: tab.filter_view is not None
+                    and tab.filter_view.count >= 450)
+    got = tab.filter_view.count if tab.filter_view is not None else "no filter view"
+    assert ok, f"exclude filter produced {got}, expected 450"
 
     assert tab.filter_view.count == 450
 
