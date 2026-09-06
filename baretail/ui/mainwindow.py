@@ -234,36 +234,46 @@ class MainWindow(tk.Tk):
         self._refresh_recent_menu()
 
     def _build_toolbar(self) -> None:
+        """Build the toolbar.
+
+        Word labels rather than emoji icons.  Emoji render inconsistently in
+        ttk buttons -- the folder glyph came out as an empty box on Windows,
+        giving the Open button no visible label at all -- and a monochrome
+        pictogram is not clearer than the word it stands for.
+        """
         def button(text, command, tooltip):
-            widget = ttk.Button(self._toolbar, text=text, width=4, command=command)
+            widget = ttk.Button(self._toolbar, text=text, width=len(text) + 2,
+                                command=command)
             widget.pack(side="left", padx=1)
             _Tooltip(widget, tooltip)
             return widget
 
-        button("📂", self.open_dialog, "Open a file  (Ctrl+O)")
-        ttk.Separator(self._toolbar, orient="vertical").pack(side="left", fill="y", padx=4)
+        def toggle(text, variable, command, tooltip):
+            widget = ttk.Checkbutton(self._toolbar, text=text, style="Toolbutton",
+                                     variable=variable, command=command)
+            widget.pack(side="left", padx=1)
+            _Tooltip(widget, tooltip)
+            return widget
 
-        self._follow_button = ttk.Checkbutton(
-            self._toolbar, text="⤓ Follow", style="Toolbutton",
-            variable=self._follow_var, command=self._toggle_follow)
-        self._follow_button.pack(side="left", padx=1)
-        _Tooltip(self._follow_button, "Follow the end of the file  (F12)")
+        def separator():
+            ttk.Separator(self._toolbar, orient="vertical").pack(
+                side="left", fill="y", padx=5, pady=2)
 
-        self._highlight_button = ttk.Checkbutton(
-            self._toolbar, text="🖍 Highlight", style="Toolbutton",
-            variable=self._highlight_var, command=self._toggle_highlighting)
-        self._highlight_button.pack(side="left", padx=1)
-        _Tooltip(self._highlight_button, "Turn highlighting on or off  (Ctrl+H)")
+        button("Open", self.open_dialog, "Open a file  (Ctrl+O)")
+        separator()
 
-        self._wrap_button = ttk.Checkbutton(
-            self._toolbar, text="↵ Wrap", style="Toolbutton",
-            variable=self._wrap_var, command=self._toggle_wrap)
-        self._wrap_button.pack(side="left", padx=1)
-        _Tooltip(self._wrap_button, "Wrap long lines")
+        self._follow_button = toggle(
+            "Follow", self._follow_var, self._toggle_follow,
+            "Follow the end of the file as it grows  (F12)")
+        self._highlight_button = toggle(
+            "Highlight", self._highlight_var, self._toggle_highlighting,
+            "Turn highlighting on or off  (Ctrl+H)")
+        self._wrap_button = toggle(
+            "Wrap", self._wrap_var, self._toggle_wrap, "Wrap long lines")
 
-        ttk.Separator(self._toolbar, orient="vertical").pack(side="left", fill="y", padx=4)
-        button("🔍", self.show_search, "Find  (Ctrl+F)")
-        button("⚙", self.edit_highlights, "Highlight rules")
+        separator()
+        button("Find", self.show_search, "Find  (Ctrl+F)")
+        button("Rules", self.edit_highlights, "Edit highlight rules")
 
     def _build_status_bar(self) -> None:
         self._status_text = ttk.Label(self._status_bar, text="Ready", anchor="w")

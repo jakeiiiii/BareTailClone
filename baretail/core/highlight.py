@@ -186,10 +186,17 @@ class RuleSet:
 
 #: Shipped defaults, ordered most severe first so that a line reading
 #: "ERROR: warning suppressed" is coloured as the error it is.
+#:
+#: Only FATAL gets a saturated fill.  An earlier palette filled both FATAL and
+#: ERROR with near-identical strong reds, and on a real log -- where errors
+#: are common and fatals are not -- the result was a wall of red that was both
+#: unreadable and useless for telling the two apart.  Tinted backgrounds with
+#: dark text keep the text legible and let the one genuinely rare severity
+#: stand out; a highlight is only useful if most lines do not have one.
 DEFAULT_RULES = [
-    HighlightRule("FATAL", fg="#FFFFFF", bg="#C00000"),
-    HighlightRule("ERROR", fg="#FFFFFF", bg="#E04040"),
-    HighlightRule("WARN", fg="#000000", bg="#FFD040"),
-    HighlightRule("INFO", fg="#000000", bg="#D8F0D8", enabled=False),
-    HighlightRule("DEBUG", fg="#606060", bg="#FFFFFF", enabled=False),
+    HighlightRule("FATAL", fg="#FFFFFF", bg="#B00020"),
+    HighlightRule("ERROR", fg="#8B0000", bg="#FFE0E0"),
+    HighlightRule("WARN", fg="#7A5200", bg="#FFF4CC"),
+    HighlightRule("INFO", fg="#000000", bg="#EAF5EA", enabled=False),
+    HighlightRule("DEBUG", fg="#707070", bg="#FFFFFF", enabled=False),
 ]
